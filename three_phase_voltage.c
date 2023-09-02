@@ -1,10 +1,15 @@
 // #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 #define MAX(x, y) (((x) > (y)) ? (x) : (y))
 #define MIN(x, y) (((x) < (y)) ? (x) : (y))
 
+#define PI 3.1415926F
+#define TWO_PI (2 * PI)
+#define PI_DIV2 (PI / 2)
+#define RAD_TO_DEGREE (180 / PI)
 // to generate more cycle, increase cycle number
 // then duplicate the input based on cycle number
 // for example : in_a[] = {Va[0], .... , Va[DATA_LENGTH - 1],
@@ -88,6 +93,15 @@ zero_cnt_t zero_cnt_ctrl[PHASE_NUM] = {
         .z1 = 0,
     },
 };
+double arcsin(double x)
+{
+  if ((int)x == 1)
+    return PI / 2;
+  else if ((int)x == -1)
+    return -PI / 2;
+  else
+    return asin(x);
+}
 
 int check_zero_cross(float *in, zero_cnt_t *z, int z_idx)
 {
@@ -121,7 +135,10 @@ void estimateFrequencyAndTheta(DDATA *d, int dataSize)
   // Implementation for estimating frequency and theta
 
   static int idx;
-  float phase_angle[PHASE_NUM];
+  float w_t;
+  float theat_tmp;
+
+  /*=============find frequency start==============*/
   for (int phase_idx; phase_idx < PHASE_NUM; phase_idx++)
   {
     check_zero_cross(d->in_a, &zero_cnt_ctrl[phase_idx], idx);
@@ -135,10 +152,49 @@ void estimateFrequencyAndTheta(DDATA *d, int dataSize)
 #if (DBG_PRINT)
       printf("Period[%d]:%0.3fs\r\n", phase_idx, (zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
       printf("Frequency[%d]:%0.3fHz\r\n", phase_idx, d->F_est);
-
 #endif
     }
   }
+  /*=============find frequency end==============*/
+
+  /*=============find theta start==============*/
+  if (idx)
+  {
+    // v(t) = Vm * sin(w(t) + theta)
+    // theta = arcsin(v(t)/Vm) - wt)
+
+    // find w(t) + Theta_est
+    if ((d->in_a[idx] < d->in_a[idx - 1])) // section 2&3
+      theat_tmp = PI - arcsin((double)d->in_a[idx] / d->va_amp);
+    else // section 1&4
+      theat_tmp = arcsin((double)d->in_a[idx] / d->va_amp);
+
+    if (theat_tmp < 0)
+    {
+      theat_tmp += TWO_PI;
+    }
+
+    // find w(t)
+    w_t = (float)idx * (2 * PI / DATA_LENGTH);
+    while (w_t > TWO_PI)
+    {
+      w_t -= TWO_PI;
+    }
+
+    // find Theta_est
+    d->Theta_est = theat_tmp - w_t;
+    while (d->Theta_est < 0)
+    {
+      d->Theta_est += TWO_PI;
+    }
+
+#if (DBG_PRINT)
+    printf("w(t) + Theta_est: %.3f rad, %.3f degree\r\n", theat_tmp, theat_tmp * RAD_TO_DEGREE);
+    printf("w(t): %.3f degree\r\n", idx, w_t * RAD_TO_DEGREE);
+#endif
+    printf("Theta_est: %0.3f rad= %0.3f degree\r\n", d->Theta_est, d->Theta_est * RAD_TO_DEGREE);
+  }
+  /*=============find theta end==============*/
 
   if (idx < dataSize)
     idx++;
