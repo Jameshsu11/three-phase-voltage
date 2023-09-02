@@ -41,9 +41,9 @@ typedef struct _DDATA
   float va_amp;
   float *in_b;
   float *in_c;
-  float *F_est;
-  float *Theta_est;
-  float *Harmonics;
+  float F_est;
+  float Theta_est;
+  float Harmonics;
   float Ts;
   float Kc1; // Kc are controller gains
   float Kc2; // choose your controller and
@@ -55,12 +55,36 @@ DDATA ddata = {
     .in_c = Vc,
     .Ts = 0.001,
 };
+
 void estimateFrequencyAndTheta(DDATA *d, int dataSize)
 {
   float v_offset = 0;
-
+  int zero_cnt = 0;
+  int z0 = 0, z1 = 0;
   // Implementation for estimating frequency and theta
+  for (int idx = 0; idx < dataSize; idx++)
+  {
+    if ((d->in_a[idx] < 0) && (d->in_a[idx - 1] >= 0))
+    {
+      printf("zero-cross idx:%d\r\n", idx);
+      if (zero_cnt == 0)
+        z0 = idx;
+      else
+        z1 = idx;
+      zero_cnt++;
+
+      if ((z1 != 0) && (z0 != 0))
+      {
+        printf("z0:%d,z1:%d,zero_cnt:%d\r\n", z0, z1, zero_cnt);
+        d->F_est = 1.f / ((z1 - z0) * d->Ts);
+        printf("Period:%0.3f\r\n", (z1 - z0) * d->Ts);
+        printf("Frequency:%0.3f\r\n", d->F_est);
+        z0 = z1;
+      }
+    }
+  }
 }
+
 void getHarmonicAmplitudes(DDATA *d, int dataSize)
 {
   // Implementation for getting harmonic amplitudes
