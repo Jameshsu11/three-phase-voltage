@@ -117,18 +117,27 @@ int check_zero_cross(float *in, zero_cnt_t *z, int z_idx)
 
 void estimateFrequencyAndTheta(DDATA *d, int dataSize)
 {
+#define DBG_PRINT 0
   // Implementation for estimating frequency and theta
 
   static int idx;
-
-  if (check_zero_cross(d->in_a, &zero_cnt_ctrl[PHASE_A], idx) > 1)
+  float phase_angle[PHASE_NUM];
+  for (int phase_idx; phase_idx < PHASE_NUM; phase_idx++)
   {
-    // Period = t1-t0
-    printf("Period:%0.3fs\r\n", (zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
+    check_zero_cross(d->in_a, &zero_cnt_ctrl[phase_idx], idx);
 
-    // Frequency =1/period
-    d->F_est = 1.f / ((zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
-    printf("Frequency:%0.3fHz\r\n", d->F_est);
+    if (zero_cnt_ctrl[phase_idx].zero_cnt > 1) // at least two zero-cross points to calculate the frequency
+    {
+      // Period = t1-t0
+      // Frequency =1/period
+      d->F_est = 1.f / ((zero_cnt_ctrl[phase_idx].z1 - zero_cnt_ctrl[phase_idx].z0) * d->Ts);
+
+#if (DBG_PRINT)
+      printf("Period[%d]:%0.3fs\r\n", phase_idx, (zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
+      printf("Frequency[%d]:%0.3fHz\r\n", phase_idx, d->F_est);
+
+#endif
+    }
   }
 
   if (idx < dataSize)
