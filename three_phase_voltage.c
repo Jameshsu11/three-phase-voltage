@@ -56,33 +56,79 @@ DDATA ddata = {
     .Ts = 0.001,
 };
 
+typedef enum
+{
+  PHASE_A = 0,
+  PHASE_B,
+  PHASE_C,
+  PHASE_NUM,
+} adc_ctrl_fsm_e;
+
+typedef struct
+{
+  int zero_cnt;
+  int z0;
+  int z1;
+} zero_cnt_t;
+
+zero_cnt_t zero_cnt_ctrl[PHASE_NUM] = {
+    {
+        .zero_cnt = 0,
+        .z0 = 0,
+        .z1 = 0,
+    },
+    {
+        .zero_cnt = 0,
+        .z0 = 0,
+        .z1 = 0,
+    },
+    {
+        .zero_cnt = 0,
+        .z0 = 0,
+        .z1 = 0,
+    },
+};
+
+int check_zero_cross(float *in, zero_cnt_t *z, int z_idx)
+{
+  if (in == NULL || z == NULL)
+    return -1;
+
+  if ((in[z_idx] < 0) && (in[z_idx - 1] >= 0))
+  {
+    if (z->zero_cnt == 0)
+    {
+      z->z0 = z_idx;
+      z->z1 = z_idx;
+    }
+    else
+    {
+      z->z0 = z->z1;
+      z->z1 = z_idx;
+    }
+
+    ++z->zero_cnt;
+
+    return z->zero_cnt;
+  }
+  else
+    return 0;
+}
+
 void estimateFrequencyAndTheta(DDATA *d, int dataSize)
 {
   // Implementation for estimating frequency and theta
 
-  static int zero_cnt;
-  static int z0, z1;
   static int idx;
 
-  if ((d->in_a[idx] < 0) && (d->in_a[idx - 1] >= 0))
+  if (check_zero_cross(d->in_a, &zero_cnt_ctrl[PHASE_A], idx) > 1)
   {
-    if (zero_cnt == 0)
-      z0 = idx;
-    else
-      z1 = idx;
-    zero_cnt++;
+    // Period = t1-t0
+    printf("Period:%0.3fs\r\n", (zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
 
-    printf("zero-cross idx:%d\r\n", idx);
-    printf("zero_cnt:%d\r\n", zero_cnt);
-
-    if (zero_cnt > 1)
-    {
-      printf("z0:%d,z1:%d\r\n", z0, z1);
-      d->F_est = 1.f / ((z1 - z0) * d->Ts);
-      printf("Period:%0.3f\r\n", (z1 - z0) * d->Ts);
-      printf("Frequency:%0.3f\r\n", d->F_est);
-      z0 = z1;
-    }
+    // Frequency =1/period
+    d->F_est = 1.f / ((zero_cnt_ctrl[PHASE_A].z1 - zero_cnt_ctrl[PHASE_A].z0) * d->Ts);
+    printf("Frequency:%0.3fHz\r\n", d->F_est);
   }
 
   if (idx < dataSize)
